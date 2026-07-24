@@ -9,16 +9,22 @@ conic-gauge fit score, matched-skill chips, and honest gaps.
 
 from __future__ import annotations
 
+import logging
 from html import escape
+from pathlib import Path
 from uuid import uuid4
 
 import gradio as gr
 
+from job_scout import db
+from job_scout.config import get_settings
 from job_scout.graph.schemas import Profile, RankedJob
 from job_scout.profile import extract_profile
 from job_scout.runner import RunResult, stream_search
 from job_scout.tools.cv_reader import CVReadError, extract_cv_text
 from job_scout.tracing import opik_url, register_prompts
+
+logger = logging.getLogger(__name__)
 
 CAPTION = "Prepares applications — never submits them."
 
@@ -249,6 +255,13 @@ a:focus-visible, button:focus-visible, .js-job-title:focus-visible {
   .js-job { animation: none; opacity: 1; transform: none; }
   .js-spin { animation: none; }
 }
+
+/* --- History tab --- */
+.js-history-meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+  border-top: 1px solid var(--border-color-primary); padding-top: 14px; margin: 14px 0; }
+.js-history-meta .js-stat-val { font-family: 'IBM Plex Mono', monospace; font-size: 1.05rem; font-weight: 600; }
+.js-history-meta .js-stat-key { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--body-text-color-subdued); margin-top: 5px; }
 """.replace("__GRAIN__", _GRAIN)
 
 # Small compass mark for the wordmark.
@@ -391,30 +404,40 @@ def _status(text: str, error: bool = False) -> str:
 def on_upload(file_path: str | None, thread_id: str):
     """Step 1 → 2: read the resume, extract the profile, and reveal the profile page.
 
-    Outputs: (page_start, page_profile, profile_html, cv_text_state, start_status, profile_state).
+    Outputs: (page_start, page_profile, profile_html, cv_text_state, start_status,
+              profile_state, cv_id_state, profile_id_state).
     """
     stay = gr.update(visible=True), gr.update(visible=False)
     go = gr.update(visible=False), gr.update(visible=True)
 
     if not file_path:
-        yield (*stay, gr.update(), "", _status("Please drop a PDF resume.", error=True), None)
+        yield (*stay, gr.update(), "", _status("Please drop a PDF resume.", error=True), None, "", "")
         return
     try:
         cv_text = extract_cv_text(file_path)
     except CVReadError as exc:
-        yield (*stay, gr.update(), "", _status(f"Could not read that PDF: {exc}", error=True), None)
+        yield (*stay, gr.update(), "", _status(f"Could not read that PDF: {exc}", error=True), None, "", "")
         return
 
-    yield (*go, _loading_html("Reading your resume…"), cv_text, "", gr.update())
+    yield (*go, _loading_html("Reading your resume…"), cv_text, "", gr.update(), "", "")
     try:
         profile = extract_profile(cv_text, thread_id=thread_id, tags=["phase-1", "ui", "extract"])
     except Exception as exc:  # noqa: BLE001 - show a friendly error and return to start
-        yield (*stay, gr.update(), "", _status(f"Couldn't read a profile: {exc}", error=True), None)
+        yield (*stay, gr.update(), "", _status(f"Couldn't read a profile: {exc}", error=True), None, "", "")
         return
-    yield (*go, _profile_html(profile), cv_text, "", profile)
+
+    cv_id, profile_id = "", ""
+    try:
+        cv_id = db.save_cv(cv_text, filename=Path(file_path).name)
+        profile_id = db.save_profile(profile, cv_id)
+    except Exception:
+        logger.warning("Failed to save CV/profile to history", exc_info=True)
+        cv_id, profile_id = "", ""
+
+    yield (*go, _profile_html(profile), cv_text, "", profile, cv_id, profile_id)
 
 
-def on_find(cv_text: str, profile: Profile | None, thread_id: str):
+def on_find(cv_text: str, profile: Profile | None, thread_id: str, profile_id: str):
     """Step 2 → 3: run the job-finding graph for the extracted profile and stream results.
 
     Outputs: (page_profile, page_results, results_html, footer_html).
@@ -432,6 +455,12 @@ def on_find(cv_text: str, profile: Profile | None, thread_id: str):
         elif kind == "result":
             result = payload  # type: ignore[assignment]
 
+    if profile_id:
+        try:
+            db.save_run(thread_id, profile_id, result, model=get_settings().scout_model)
+        except Exception:
+            logger.warning("Failed to save run to history", exc_info=True)
+
     yield (*go, _results_html(result), _footer_html(result))
 
 
@@ -439,7 +468,7 @@ def reset():
     """Return to step 1 and clear the wizard.
 
     Outputs: (page_start, page_profile, page_results, cv_file, cv_text_state,
-    start_status, results_html, footer_html).
+    start_status, results_html, footer_html, cv_id_state, profile_id_state).
     """
     return (
         gr.update(visible=True),
@@ -450,56 +479,144 @@ def reset():
         "",
         "",
         "",
+        "",
+        "",
     )
 
 
+def _history_run_detail(run: dict) -> str:
+    """Render the detail view for a historical run."""
+    profile: Profile | None = run.get("profile")
+    ranked_jobs: list[RankedJob] = run.get("ranked_jobs", [])
+    created = run.get("created_at", "")[:19].replace("T", " ")
+    model = escape(run.get("model", ""))
+    cost = f"${run.get('cost_usd', 0):.4f}"
+    latency = f"{run.get('latency_s', 0)}s"
+    n_ranked = run.get("n_jobs_ranked", 0)
+
+    meta = (
+        '<div class="js-card">'
+        f'<p class="js-profile-name">Run: {escape(created)}</p>'
+        '<div class="js-history-meta">'
+        f'<div class="js-stat"><div class="js-stat-val">{model}</div><div class="js-stat-key">Model</div></div>'
+        f'<div class="js-stat"><div class="js-stat-val">{cost}</div><div class="js-stat-key">Cost</div></div>'
+        f'<div class="js-stat"><div class="js-stat-val">{latency}</div><div class="js-stat-key">Latency</div></div>'
+        f'<div class="js-stat"><div class="js-stat-val">{n_ranked}</div><div class="js-stat-key">Jobs ranked</div></div>'
+        "</div></div>"
+    )
+
+    profile_card = _profile_html(profile) if profile else ""
+    job_cards = "".join(_job_card(rj, i) for i, rj in enumerate(ranked_jobs))
+    jobs_html = f'<div class="js-jobs">{job_cards}</div>' if job_cards else ""
+
+    return f"{meta}{profile_card}{jobs_html}"
+
+
+def _load_history_choices() -> list[tuple[str, str]]:
+    """Load run list for the history dropdown. Returns (label, run_id) tuples."""
+    try:
+        runs = db.list_runs(limit=50)
+    except Exception:
+        logger.warning("Failed to load history", exc_info=True)
+        return []
+    choices = []
+    for r in runs:
+        date = r["created_at"][:19].replace("T", " ")
+        name = r.get("profile_name") or "Unknown"
+        n = r.get("n_jobs_ranked", 0)
+        top = r.get("top_score") or 0
+        label = f"{date} — {name} — {n} jobs — top {top}"
+        choices.append((label, r["run_id"]))
+    return choices
+
+
+def _on_history_select(run_id: str) -> str:
+    """Load and render a historical run's detail view."""
+    if not run_id:
+        return '<div class="js-empty"><div class="js-empty-icon">📋</div><div>Select a run to view details.</div></div>'
+    try:
+        run = db.get_run(run_id)
+    except Exception:
+        logger.warning("Failed to load run %s", run_id, exc_info=True)
+        return '<div class="js-empty"><div>Could not load run details.</div></div>'
+    if run is None:
+        return '<div class="js-empty"><div>Run not found.</div></div>'
+    return _history_run_detail(run)
+
+
+def _refresh_history() -> gr.update:
+    """Refresh the history dropdown choices."""
+    return gr.update(choices=_load_history_choices(), value=None)
+
+
 def build_app() -> gr.Blocks:
-    """Build the three-step wizard app."""
+    """Build the three-step wizard app with a History tab."""
     register_prompts()
 
     with gr.Blocks(title="Job Scout", theme=THEME, css=CSS) as demo:
         thread_id = gr.State(lambda: str(uuid4()))
         cv_text_state = gr.State("")
         profile_state = gr.State(None)
+        cv_id_state = gr.State("")
+        profile_id_state = gr.State("")
 
         gr.HTML(
             f'<div id="js-header"><div class="js-mark">{_MARK}<h1>Job Scout</h1></div>'
             f'<div><span class="js-tag">{CAPTION}</span></div></div>'
         )
 
-        with gr.Group(visible=True) as page_start:
-            gr.HTML(_stepper(1))
-            gr.HTML(INTRO_HTML)
-            cv_file = gr.File(label="", file_types=[".pdf"], type="filepath", height=150, elem_classes=["js-drop"])
-            start_status = gr.HTML('<div class="js-status"></div>')
+        with gr.Tab("Scout"):
+            with gr.Group(visible=True) as page_start:
+                gr.HTML(_stepper(1))
+                gr.HTML(INTRO_HTML)
+                cv_file = gr.File(label="", file_types=[".pdf"], type="filepath", height=150, elem_classes=["js-drop"])
+                start_status = gr.HTML('<div class="js-status"></div>')
 
-        with gr.Group(visible=False) as page_profile:
-            gr.HTML(_stepper(2))
-            gr.HTML('<p class="js-section-label">Your profile</p>')
-            profile_out = gr.HTML()
-            find_btn = gr.Button("Find jobs", variant="primary", size="lg")
-            change_btn = gr.Button("Upload a different resume", variant="secondary")
+            with gr.Group(visible=False) as page_profile:
+                gr.HTML(_stepper(2))
+                gr.HTML('<p class="js-section-label">Your profile</p>')
+                profile_out = gr.HTML()
+                find_btn = gr.Button("Find jobs", variant="primary", size="lg")
+                change_btn = gr.Button("Upload a different resume", variant="secondary")
 
-        with gr.Group(visible=False) as page_results:
-            gr.HTML(_stepper(3))
-            gr.HTML('<p class="js-section-label">Ranked jobs</p>')
-            results_out = gr.HTML()
-            footer_out = gr.HTML()
-            restart_btn = gr.Button("Start over", variant="secondary")
+            with gr.Group(visible=False) as page_results:
+                gr.HTML(_stepper(3))
+                gr.HTML('<p class="js-section-label">Ranked jobs</p>')
+                results_out = gr.HTML()
+                footer_out = gr.HTML()
+                restart_btn = gr.Button("Start over", variant="secondary")
 
-        cv_file.upload(
-            on_upload,
-            inputs=[cv_file, thread_id],
-            outputs=[page_start, page_profile, profile_out, cv_text_state, start_status, profile_state],
-        )
+        with gr.Tab("History"):
+            history_dropdown = gr.Dropdown(
+                label="Past runs",
+                choices=_load_history_choices(),
+                interactive=True,
+            )
+            history_refresh_btn = gr.Button("Refresh", variant="secondary", size="sm")
+            history_detail = gr.HTML(
+                '<div class="js-empty"><div class="js-empty-icon">📋</div>'
+                "<div>Select a run to view details.</div></div>"
+            )
+
+        upload_outputs = [
+            page_start, page_profile, profile_out, cv_text_state,
+            start_status, profile_state, cv_id_state, profile_id_state,
+        ]
+        cv_file.upload(on_upload, inputs=[cv_file, thread_id], outputs=upload_outputs)
         find_btn.click(
             on_find,
-            inputs=[cv_text_state, profile_state, thread_id],
+            inputs=[cv_text_state, profile_state, thread_id, profile_id_state],
             outputs=[page_profile, page_results, results_out, footer_out],
         )
-        reset_outputs = [page_start, page_profile, page_results, cv_file, cv_text_state, start_status, results_out, footer_out]
+        reset_outputs = [
+            page_start, page_profile, page_results, cv_file, cv_text_state,
+            start_status, results_out, footer_out, cv_id_state, profile_id_state,
+        ]
         change_btn.click(reset, outputs=reset_outputs)
         restart_btn.click(reset, outputs=reset_outputs)
+
+        history_dropdown.change(_on_history_select, inputs=[history_dropdown], outputs=[history_detail])
+        history_refresh_btn.click(_refresh_history, outputs=[history_dropdown])
 
     return demo
 

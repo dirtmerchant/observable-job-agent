@@ -12,7 +12,8 @@ COPY data/cached_jobs.json data/cached_jobs.json
 
 # Install the project itself
 RUN uv sync --frozen --no-dev \
- && chown -R 1000:1000 /app/.venv
+ && mkdir -p /app/data \
+ && chown -R 1000:1000 /app/.venv /app/data
 
 # Non-root user
 USER 1000
@@ -20,6 +21,7 @@ USER 1000
 ENV GRADIO_SERVER_NAME=0.0.0.0
 ENV UV_CACHE_DIR=/tmp/.uv-cache
 ENV CACHE_PATH=/app/data/cached_jobs.json
+ENV SCOUT_DB_PATH=/app/data/scout.db
 EXPOSE 7860
 
 ENTRYPOINT ["uv", "run", "python", "-m", "job_scout.app"]

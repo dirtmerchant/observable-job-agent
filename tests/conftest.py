@@ -17,6 +17,7 @@ os.environ["ADZUNA_APP_ID"] = ""
 os.environ["ADZUNA_APP_KEY"] = ""
 os.environ["JSEARCH_API_KEY"] = ""
 os.environ.setdefault("OPENAI_API_KEY", "test-openai-key")
+os.environ["SCOUT_DB_PATH"] = ":memory:"
 
 from job_scout.config import get_settings  # noqa: E402
 from job_scout.graph.schemas import JobPosting, Profile  # noqa: E402

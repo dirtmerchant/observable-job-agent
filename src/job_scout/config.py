@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     max_llm_calls_per_run: int = Field(default=25, alias="MAX_LLM_CALLS_PER_RUN")
 
     cache_path: str = Field(default="", alias="CACHE_PATH")
+    scout_db_path: str = Field(default="data/scout.db", alias="SCOUT_DB_PATH")
 
     @field_validator("opik_workspace", "opik_project_name", "scout_model", "scout_tailor_model", mode="before")
     @classmethod

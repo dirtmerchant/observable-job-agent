@@ -23,5 +23,10 @@ dist/
 # OS
 .DS_Store
 
+# SQLite databases
+data/*.db
+data/*.db-journal
+data/*.db-wal
+
 # Batch/snapshot run logs (artifacts, not committed)
 reports/*.log
