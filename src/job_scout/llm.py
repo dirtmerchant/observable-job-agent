@@ -35,11 +35,27 @@ def _export_openai_key() -> None:
         os.environ["OPENAI_API_KEY"] = key
 
 
+def _export_ollama_host() -> None:
+    """Copy ``OLLAMA_HOST`` from settings into the environment for ``langchain-ollama``.
+
+    The Ollama client reads the base URL from ``OLLAMA_HOST``. Like the OpenAI
+    key, ``pydantic-settings`` keeps it in the ``Settings`` object but doesn't
+    export it to ``os.environ``.
+    """
+    if os.environ.get("OLLAMA_HOST"):
+        return
+    host = get_settings().ollama_host
+    if host:
+        os.environ["OLLAMA_HOST"] = host
+
+
 @lru_cache(maxsize=8)
 def get_chat_model(model: str, temperature: float = 0.0) -> BaseChatModel:
     """Return a cached chat model for a LangChain provider string (e.g. ``openai:gpt-4o-mini``)."""
     if model.startswith("openai:"):
         _export_openai_key()
+    elif model.startswith("ollama:"):
+        _export_ollama_host()
     return init_chat_model(model, temperature=temperature)
 
 

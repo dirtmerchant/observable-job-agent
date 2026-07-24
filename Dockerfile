@@ -19,8 +19,7 @@ USER 1000
 
 ENV GRADIO_SERVER_NAME=0.0.0.0
 ENV UV_CACHE_DIR=/tmp/.uv-cache
+ENV CACHE_PATH=/app/data/cached_jobs.json
 EXPOSE 7860
 
-# Use `uv run` so __file__ resolves within the source tree —
-# CACHE_PATH in tools/jobs_api.py traverses 4 parents from __file__
 ENTRYPOINT ["uv", "run", "python", "-m", "job_scout.app"]

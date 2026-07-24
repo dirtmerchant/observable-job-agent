@@ -26,7 +26,15 @@ from job_scout.graph.schemas import JobPosting
 DESCRIPTION_LIMIT = 4000
 DEFAULT_LIMIT = 25
 DEFAULT_COUNTRY = "us"
-CACHE_PATH = Path(__file__).resolve().parent.parent.parent.parent / "data" / "cached_jobs.json"
+_DEFAULT_CACHE_PATH = Path(__file__).resolve().parent.parent.parent.parent / "data" / "cached_jobs.json"
+
+
+def _resolve_cache_path() -> Path:
+    """Return the cache path from settings, falling back to the default relative path."""
+    custom = get_settings().cache_path
+    if custom:
+        return Path(custom)
+    return _DEFAULT_CACHE_PATH
 
 _COUNTRY_CODES: dict[str, str] = {
     "united states": "us", "usa": "us", "us": "us", "america": "us",
@@ -232,8 +240,8 @@ class CacheSource:
 
     name = "cache"
 
-    def __init__(self, path: Path = CACHE_PATH) -> None:
-        self.path = path
+    def __init__(self, path: Path | None = None) -> None:
+        self.path = path if path is not None else _resolve_cache_path()
 
     def _load(self) -> list[dict]:
         """Load the cached postings, or an empty list if the file is missing/invalid."""

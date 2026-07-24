@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     scout_model: str = Field(default="openai:gpt-4o-mini", alias="SCOUT_MODEL")
     scout_tailor_model: str = Field(default="openai:gpt-4o-mini", alias="SCOUT_TAILOR_MODEL")
+    ollama_host: str = Field(default="", alias="OLLAMA_HOST")
 
     openai_api_key: SecretStr = Field(default=SecretStr(""), alias="OPENAI_API_KEY")
 
@@ -38,6 +39,8 @@ class Settings(BaseSettings):
     adzuna_app_key: SecretStr = Field(default=SecretStr(""), alias="ADZUNA_APP_KEY")
 
     max_llm_calls_per_run: int = Field(default=25, alias="MAX_LLM_CALLS_PER_RUN")
+
+    cache_path: str = Field(default="", alias="CACHE_PATH")
 
     @field_validator("opik_workspace", "opik_project_name", "scout_model", "scout_tailor_model", mode="before")
     @classmethod

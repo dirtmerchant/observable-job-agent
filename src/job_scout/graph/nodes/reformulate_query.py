@@ -6,10 +6,14 @@ Increments the reformulation counter (the loop guard) and writes a new
 
 from __future__ import annotations
 
+import logging
+
 from job_scout.config import get_settings
 from job_scout.graph.prompts.reformulate import REFORMULATE_PROMPT
 from job_scout.graph.state import AgentState
 from job_scout.llm import ensure_budget, get_chat_model
+
+logger = logging.getLogger(__name__)
 
 
 def reformulate_query(state: AgentState) -> dict:
@@ -18,15 +22,24 @@ def reformulate_query(state: AgentState) -> dict:
     calls = state.get("llm_calls", 0)
     ensure_budget(calls, 1, settings.max_llm_calls_per_run)
     profile = state["profile"]
+    previous_query = state.get("search_query") or ""
+    errors: list[str] = list(state.get("errors") or [])
 
     prompt = REFORMULATE_PROMPT.format(
         profile=", ".join(profile.primary_roles + profile.skills[:10]),
-        previous_query=state.get("search_query") or "",
+        previous_query=previous_query,
     )
-    new_query = get_chat_model(settings.scout_model, temperature=0.0).invoke(prompt).content.strip()
+    try:
+        new_query = get_chat_model(settings.scout_model, temperature=0.0).invoke(prompt).content.strip()
+    except Exception as exc:  # noqa: BLE001
+        msg = f"reformulate_query: LLM call failed, keeping previous query: {exc}"
+        logger.warning(msg)
+        errors.append(msg)
+        new_query = previous_query
 
     return {
         "search_query": new_query,
         "reformulation_count": state.get("reformulation_count", 0) + 1,
         "llm_calls": calls + 1,
+        "errors": errors,
     }

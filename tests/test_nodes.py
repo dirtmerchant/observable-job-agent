@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
+from langchain_core.exceptions import OutputParserException
+from pydantic import ValidationError
+
 import job_scout.graph.nodes.fetch_jobs as fetch_mod
 import job_scout.graph.nodes.rank_jobs as rank_mod
 import job_scout.graph.nodes.reformulate_query as reformulate_mod
@@ -74,3 +79,49 @@ def test_reformulate_increments_counter(monkeypatch, sample_profile):
     assert out["search_query"] == "data analyst"
     assert out["reformulation_count"] == 1
     assert out["llm_calls"] == 4
+
+
+def test_rank_jobs_handles_parse_failure(monkeypatch, sample_profile):
+    """When structured output fails, the batch is skipped and an error is logged."""
+    jobs = [make_job("j1", "Data Scientist", "Acme"), make_job("j2", "ML Engineer", "Globex")]
+
+    def fake_model(*a, **k):
+        llm = structured_llm(None)
+        llm.with_structured_output.return_value.invoke.side_effect = OutputParserException("bad json")
+        return llm
+
+    monkeypatch.setattr(rank_mod, "get_chat_model", fake_model)
+    out = rank_jobs({"profile": sample_profile, "jobs": jobs, "llm_calls": 0})
+    assert out["ranked_jobs"] == []
+    assert out["llm_calls"] == 1
+    assert any("structured-output parse failed" in e for e in out["errors"])
+
+
+def test_rank_jobs_handles_validation_error(monkeypatch, sample_profile):
+    """A ValidationError from pydantic is caught the same way."""
+    jobs = [make_job("j1", "Data Scientist", "Acme")]
+
+    def fake_model(*a, **k):
+        llm = structured_llm(None)
+        llm.with_structured_output.return_value.invoke.side_effect = ValidationError.from_exception_data(
+            title="JobScores", line_errors=[], input_type="json"
+        )
+        return llm
+
+    monkeypatch.setattr(rank_mod, "get_chat_model", fake_model)
+    out = rank_jobs({"profile": sample_profile, "jobs": jobs, "llm_calls": 0})
+    assert out["ranked_jobs"] == []
+    assert any("structured-output parse failed" in e for e in out["errors"])
+
+
+def test_reformulate_handles_llm_failure(monkeypatch, sample_profile):
+    """When the LLM call fails, the previous query is kept."""
+    failing_llm = MagicMock()
+    failing_llm.invoke.side_effect = RuntimeError("model unavailable")
+    monkeypatch.setattr(reformulate_mod, "get_chat_model", lambda *a, **k: failing_llm)
+    state = {"profile": sample_profile, "search_query": "data scientist", "reformulation_count": 0, "llm_calls": 3}
+    out = reformulate_query(state)
+    assert out["search_query"] == "data scientist"  # kept previous
+    assert out["reformulation_count"] == 1
+    assert out["llm_calls"] == 4
+    assert any("keeping previous query" in e for e in out["errors"])

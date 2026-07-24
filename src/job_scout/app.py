@@ -506,7 +506,18 @@ def build_app() -> gr.Blocks:
 
 def main() -> None:
     """Launch the Gradio app."""
-    build_app().launch()
+    app = build_app()
+    # Mount a lightweight health endpoint for k8s probes.
+    from fastapi import FastAPI
+    from fastapi.responses import JSONResponse
+
+    fastapi_app: FastAPI = app.app  # type: ignore[union-attr]
+
+    @fastapi_app.get("/healthz")
+    def healthz() -> JSONResponse:
+        return JSONResponse({"status": "ok"})
+
+    app.launch()
 
 
 if __name__ == "__main__":

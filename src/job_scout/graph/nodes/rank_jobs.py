@@ -6,13 +6,19 @@ to its ``JobPosting`` to build a ``RankedJob``.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
+
+from langchain_core.exceptions import OutputParserException
+from pydantic import ValidationError
 
 from job_scout.config import get_settings
 from job_scout.graph.prompts.rank_jobs import RANK_JOBS_PROMPT
 from job_scout.graph.schemas import JobPosting, JobScores, Profile, RankedJob
 from job_scout.graph.state import AgentState
 from job_scout.llm import ensure_budget, get_chat_model
+
+logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 5
 
@@ -63,10 +69,18 @@ def rank_jobs(state: AgentState) -> dict:
 
     model = get_chat_model(settings.scout_model, temperature=0.0).with_structured_output(JobScores)
     ranked: list[RankedJob] = []
+    errors: list[str] = list(state.get("errors") or [])
     for batch in _batches(jobs, BATCH_SIZE):
         prompt = RANK_JOBS_PROMPT.format(profile=_render_profile(profile), jobs=_render_jobs(batch))
-        result: JobScores = model.invoke(prompt)
         calls += 1
+        try:
+            result: JobScores = model.invoke(prompt)
+        except (OutputParserException, ValidationError) as exc:
+            batch_ids = [j.job_id for j in batch]
+            msg = f"rank_jobs: structured-output parse failed for batch {batch_ids}: {exc}"
+            logger.warning(msg)
+            errors.append(msg)
+            continue
         for score in result.scores:
             job = by_id.get(score.job_id)
             if job is None:
@@ -82,4 +96,4 @@ def rank_jobs(state: AgentState) -> dict:
             )
 
     ranked.sort(key=lambda r: r.fit_score, reverse=True)
-    return {"ranked_jobs": ranked, "llm_calls": calls}
+    return {"ranked_jobs": ranked, "llm_calls": calls, "errors": errors}
