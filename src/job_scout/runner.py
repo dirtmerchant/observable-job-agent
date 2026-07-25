@@ -16,6 +16,16 @@ from langchain_core.callbacks import UsageMetadataCallbackHandler
 from job_scout.config import get_settings
 from job_scout.graph import build_graph
 from job_scout.graph.schemas import Profile, RankedJob
+from job_scout.metrics import (
+    JOB_SOURCE_FETCHES,
+    JOBS_FETCHED,
+    JOBS_RANKED,
+    REFORMULATIONS,
+    RUN_COST,
+    RUN_DURATION,
+    RUNS_TOTAL,
+    TOP_FIT_SCORE,
+)
 from job_scout.profile import extract_profile
 from job_scout.tracing import attach_cv, get_tracer, opik_url, trace_graph
 
@@ -111,6 +121,20 @@ def stream_search(
             attach_cv(tracer, cv_path)
         if tracer:
             tracer.flush()
+
+        # ── Record Prometheus metrics ──────────────────────────────────
+        status = "error" if result.failed else "success"
+        RUNS_TOTAL.labels(status=status).inc()
+        RUN_DURATION.labels(status=status).observe(result.latency_s)
+        RUN_COST.observe(result.cost_usd)
+        JOBS_FETCHED.observe(result.n_jobs_fetched)
+        JOBS_RANKED.observe(result.n_jobs_ranked)
+        if result.ranked_jobs:
+            TOP_FIT_SCORE.observe(max(rj.fit_score for rj in result.ranked_jobs))
+        if result.reformulation_count:
+            REFORMULATIONS.inc(result.reformulation_count)
+        for source in result.jobs_sources:
+            JOB_SOURCE_FETCHES.labels(source=source).inc()
 
     yield ("result", result)
 

@@ -594,13 +594,18 @@ def build_app() -> gr.Blocks:
             )
             history_refresh_btn = gr.Button("Refresh", variant="secondary", size="sm")
             history_detail = gr.HTML(
-                '<div class="js-empty"><div class="js-empty-icon">📋</div>'
-                "<div>Select a run to view details.</div></div>"
+                '<div class="js-empty"><div class="js-empty-icon">📋</div><div>Select a run to view details.</div></div>'
             )
 
         upload_outputs = [
-            page_start, page_profile, profile_out, cv_text_state,
-            start_status, profile_state, cv_id_state, profile_id_state,
+            page_start,
+            page_profile,
+            profile_out,
+            cv_text_state,
+            start_status,
+            profile_state,
+            cv_id_state,
+            profile_id_state,
         ]
         cv_file.upload(on_upload, inputs=[cv_file, thread_id], outputs=upload_outputs)
         find_btn.click(
@@ -609,8 +614,16 @@ def build_app() -> gr.Blocks:
             outputs=[page_profile, page_results, results_out, footer_out],
         )
         reset_outputs = [
-            page_start, page_profile, page_results, cv_file, cv_text_state,
-            start_status, results_out, footer_out, cv_id_state, profile_id_state,
+            page_start,
+            page_profile,
+            page_results,
+            cv_file,
+            cv_text_state,
+            start_status,
+            results_out,
+            footer_out,
+            cv_id_state,
+            profile_id_state,
         ]
         change_btn.click(reset, outputs=reset_outputs)
         restart_btn.click(reset, outputs=reset_outputs)
@@ -628,11 +641,18 @@ def main() -> None:
     # must be added *after* launch() returns.
     demo.launch(prevent_thread_lock=True)
 
-    from fastapi.responses import JSONResponse
+    from fastapi.responses import JSONResponse, Response
+    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+    from job_scout.metrics import REGISTRY
 
     @demo.app.get("/healthz")  # type: ignore[union-attr]
     def healthz() -> JSONResponse:
         return JSONResponse({"status": "ok"})
+
+    @demo.app.get("/metrics")  # type: ignore[union-attr]
+    def metrics() -> Response:
+        return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
     demo.block_thread()
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 from job_scout.config import get_settings
 from job_scout.graph.schemas import Profile
 from job_scout.llm import get_chat_model
+from job_scout.metrics import PROFILE_EXTRACTIONS
 
 EXTRACT_PROFILE_PROMPT_NAME = "extract_profile"
 
@@ -45,7 +46,13 @@ def extract_profile(cv_text: str, *, thread_id: str | None = None, tags: list[st
 
     tracer = get_tracer(thread_id, tags or ["extract"]) if thread_id else None
     config = {"callbacks": [tracer]} if tracer else {}
-    profile: Profile = model.invoke(EXTRACT_PROFILE_PROMPT.format(cv_text=cv_text), config=config)
+    try:
+        profile: Profile = model.invoke(EXTRACT_PROFILE_PROMPT.format(cv_text=cv_text), config=config)
+    except Exception:
+        PROFILE_EXTRACTIONS.labels(status="error").inc()
+        raise
+    else:
+        PROFILE_EXTRACTIONS.labels(status="success").inc()
     if tracer:
         tracer.flush()
     return profile

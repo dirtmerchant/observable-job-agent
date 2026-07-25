@@ -67,6 +67,10 @@ All env vars are optional. See `.env.example` for the full list. Key settings in
 - `SCOUT_DB_PATH` — SQLite database path (default: `data/scout.db`)
 - Job source keys: `JSEARCH_API_KEY`, `ADZUNA_APP_ID`/`ADZUNA_APP_KEY` (all optional)
 
+## Metrics
+
+Prometheus metrics are exposed at `/metrics` on the same port as the Gradio app (7860). All metrics use a dedicated `CollectorRegistry` in `metrics.py` to avoid conflicts with default process collectors. Metric names are prefixed with `job_scout_`. The homelab Helm chart includes a `ServiceMonitor` and Grafana dashboard ConfigMap.
+
 ## Testing Conventions
 
 - **All tests run offline** — `conftest.py` forces `OPIK_ENABLED=false` and clears API keys before any imports
