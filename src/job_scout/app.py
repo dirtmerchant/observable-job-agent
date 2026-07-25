@@ -623,18 +623,18 @@ def build_app() -> gr.Blocks:
 
 def main() -> None:
     """Launch the Gradio app."""
-    app = build_app()
-    # Mount a lightweight health endpoint for k8s probes.
-    from fastapi import FastAPI
+    demo = build_app()
+    # Gradio 6 replaces demo.app during launch(), so the health endpoint
+    # must be added *after* launch() returns.
+    demo.launch(prevent_thread_lock=True)
+
     from fastapi.responses import JSONResponse
 
-    fastapi_app: FastAPI = app.app  # type: ignore[union-attr]
-
-    @fastapi_app.get("/healthz")
+    @demo.app.get("/healthz")  # type: ignore[union-attr]
     def healthz() -> JSONResponse:
         return JSONResponse({"status": "ok"})
 
-    app.launch()
+    demo.block_thread()
 
 
 if __name__ == "__main__":
