@@ -61,7 +61,7 @@ The loop exits when enough good matches are found or the reformulation cap (2) i
 
 All env vars are optional. See `.env.example` for the full list. Key settings in `config.py` (pydantic-settings with `SecretStr` for API keys):
 
-- `SCOUT_MODEL` — LLM provider:model string (default: `anthropic:claude-sonnet-4-20250514`)
+- `SCOUT_MODEL` — LLM provider:model string (default: `anthropic:claude-sonnet-4-5-20250929`)
 - `MAX_LLM_CALLS_PER_RUN` — circuit breaker (default: 25)
 - `OPIK_ENABLED` — toggle tracing (default: true)
 - `SCOUT_DB_PATH` — SQLite database path (default: `data/scout.db`)

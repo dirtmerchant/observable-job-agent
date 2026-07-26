@@ -23,8 +23,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    scout_model: str = Field(default="anthropic:claude-sonnet-4-20250514", alias="SCOUT_MODEL")
-    scout_tailor_model: str = Field(default="anthropic:claude-sonnet-4-20250514", alias="SCOUT_TAILOR_MODEL")
+    scout_model: str = Field(default="anthropic:claude-sonnet-4-5-20250929", alias="SCOUT_MODEL")
+    scout_tailor_model: str = Field(default="anthropic:claude-sonnet-4-5-20250929", alias="SCOUT_TAILOR_MODEL")
     ollama_host: str = Field(default="", alias="OLLAMA_HOST")
 
     anthropic_api_key: SecretStr = Field(default=SecretStr(""), alias="ANTHROPIC_API_KEY")
