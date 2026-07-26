@@ -38,9 +38,14 @@ def _ranked_jobs() -> list[RankedJob]:
     return [
         RankedJob(
             job=JobPosting(
-                job_id="j1", source="cache", title="ML Engineer",
-                company="Acme", location="London", remote=True,
-                description="Build models.", url="https://example.com/j1",
+                job_id="j1",
+                source="cache",
+                title="ML Engineer",
+                company="Acme",
+                location="London",
+                remote=True,
+                description="Build models.",
+                url="https://example.com/j1",
                 tags=["ml", "python"],
             ),
             fit_score=85,
@@ -50,9 +55,14 @@ def _ranked_jobs() -> list[RankedJob]:
         ),
         RankedJob(
             job=JobPosting(
-                job_id="j2", source="remotive", title="Data Analyst",
-                company="Globex", location="Remote", remote=True,
-                description="Analyze data.", url="https://example.com/j2",
+                job_id="j2",
+                source="remotive",
+                title="Data Analyst",
+                company="Globex",
+                location="Remote",
+                remote=True,
+                description="Analyze data.",
+                url="https://example.com/j2",
                 tags=["sql"],
             ),
             fit_score=62,

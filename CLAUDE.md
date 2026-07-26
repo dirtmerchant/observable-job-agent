@@ -55,13 +55,13 @@ The loop exits when enough good matches are found or the reformulation cap (2) i
 
 **UI** (`app.py`): Gradio 3-step wizard (drop CV → review profile → find jobs) with a History tab to browse past searches. Custom CSS theme.
 
-**LLM factory** (`llm.py`): `get_chat_model("provider:model")` supports `openai:`, `groq:`, `ollama:` prefixes. Default model configured via `SCOUT_MODEL` env var.
+**LLM factory** (`llm.py`): `get_chat_model("provider:model")` supports `anthropic:`, `openai:`, `groq:`, `ollama:` prefixes. Default model configured via `SCOUT_MODEL` env var.
 
 ## Configuration
 
 All env vars are optional. See `.env.example` for the full list. Key settings in `config.py` (pydantic-settings with `SecretStr` for API keys):
 
-- `SCOUT_MODEL` — LLM provider:model string (default: `openai:gpt-4o-mini`)
+- `SCOUT_MODEL` — LLM provider:model string (default: `anthropic:claude-sonnet-4-20250514`)
 - `MAX_LLM_CALLS_PER_RUN` — circuit breaker (default: 25)
 - `OPIK_ENABLED` — toggle tracing (default: true)
 - `SCOUT_DB_PATH` — SQLite database path (default: `data/scout.db`)

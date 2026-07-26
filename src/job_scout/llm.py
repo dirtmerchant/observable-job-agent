@@ -22,6 +22,15 @@ class LLMBudgetExceededError(RuntimeError):
     """Raised when a run would exceed ``MAX_LLM_CALLS_PER_RUN``."""
 
 
+def _export_anthropic_key() -> None:
+    """Copy the Anthropic key from settings into the environment for LangChain."""
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return
+    key = get_settings().anthropic_api_key.get_secret_value()
+    if key:
+        os.environ["ANTHROPIC_API_KEY"] = key
+
+
 def _export_openai_key() -> None:
     """Copy the OpenAI key from settings into the environment for LangChain.
 
@@ -52,7 +61,9 @@ def _export_ollama_host() -> None:
 @lru_cache(maxsize=8)
 def get_chat_model(model: str, temperature: float = 0.0) -> BaseChatModel:
     """Return a cached chat model for a LangChain provider string (e.g. ``openai:gpt-4o-mini``)."""
-    if model.startswith("openai:"):
+    if model.startswith("anthropic:"):
+        _export_anthropic_key()
+    elif model.startswith("openai:"):
         _export_openai_key()
     elif model.startswith("ollama:"):
         _export_ollama_host()

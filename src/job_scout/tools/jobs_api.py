@@ -36,6 +36,7 @@ def _resolve_cache_path() -> Path:
         return Path(custom)
     return _DEFAULT_CACHE_PATH
 
+
 _COUNTRY_CODES: dict[str, str] = {
     "united states": "us", "usa": "us", "us": "us", "america": "us",
     "united kingdom": "gb", "uk": "gb", "england": "gb", "london": "gb",

@@ -138,6 +138,7 @@ def _json_dumps(obj: object) -> str:
 # CVs
 # ---------------------------------------------------------------------------
 
+
 def save_cv(cv_text: str, filename: str, *, conn: sqlite3.Connection | None = None) -> str:
     """Insert a CV record. Returns the generated cv_id."""
     conn = conn or get_connection()
@@ -153,6 +154,7 @@ def save_cv(cv_text: str, filename: str, *, conn: sqlite3.Connection | None = No
 # ---------------------------------------------------------------------------
 # Profiles
 # ---------------------------------------------------------------------------
+
 
 def save_profile(profile: Profile, cv_id: str, *, conn: sqlite3.Connection | None = None) -> str:
     """Insert a profile linked to a CV. Returns the generated profile_id."""
@@ -208,6 +210,7 @@ def _row_to_profile(row: sqlite3.Row) -> Profile:
 # ---------------------------------------------------------------------------
 # Runs
 # ---------------------------------------------------------------------------
+
 
 def save_run(
     run_id: str,
@@ -291,9 +294,7 @@ def save_run(
         raise
 
 
-def list_runs(
-    *, limit: int = 20, offset: int = 0, conn: sqlite3.Connection | None = None
-) -> list[dict]:
+def list_runs(*, limit: int = 20, offset: int = 0, conn: sqlite3.Connection | None = None) -> list[dict]:
     """Return recent runs with profile name and top score, newest first."""
     conn = conn or get_connection()
     rows = conn.execute(
@@ -320,9 +321,7 @@ def get_run(run_id: str, *, conn: sqlite3.Connection | None = None) -> dict | No
     run["failed"] = bool(run["failed"])
 
     # Load profile
-    profile_row = conn.execute(
-        "SELECT * FROM profiles WHERE profile_id = ?", (run["profile_id"],)
-    ).fetchone()
+    profile_row = conn.execute("SELECT * FROM profiles WHERE profile_id = ?", (run["profile_id"],)).fetchone()
     run["profile"] = _row_to_profile(profile_row) if profile_row else None
 
     # Load ranked jobs
